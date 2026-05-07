@@ -7,9 +7,10 @@ from rest_framework.views import APIView
 
 from apps.converters.exceptions import ConverterError
 
-from .models import ProcessingJob, ProcessingStatus
+from .models import ProcessingJob, ProcessingStatus, ProcessingTool
 from .serializers import ProcessingJobSerializer
 from .services import (
+    attach_uploaded_files_to_job,
     enqueue_pdf_to_images_job,
     run_image_compress_job,
     run_image_convert_job,
@@ -19,11 +20,60 @@ from .services import (
     run_pdf_merge_job,
     run_pdf_rotate_job,
     run_pdf_split_job,
-    run_pdf_to_images_job,
 )
-from apps.processing.models import ProcessingJob
-from apps.processing.services import attach_uploaded_files_to_job
-from apps.processing.tasks import process_pdf_merge_job
+from .tasks import process_pdf_merge_job
+
+
+ANONYMOUS_JOB_SESSION_KEY = "processing_job_ids"
+ANONYMOUS_JOB_SESSION_LIMIT = 50
+
+
+def _serialize_job(request, job):
+    return ProcessingJobSerializer(
+        job,
+        context={"request": request},
+    ).data
+
+
+def _remember_anonymous_job(request, job):
+    if request.user.is_authenticated:
+        return
+
+    job_ids = request.session.get(ANONYMOUS_JOB_SESSION_KEY, [])
+    job_id = str(job.id)
+
+    if job_id in job_ids:
+        return
+
+    request.session[ANONYMOUS_JOB_SESSION_KEY] = (
+        job_ids + [job_id]
+    )[-ANONYMOUS_JOB_SESSION_LIMIT:]
+    request.session.modified = True
+
+
+def _job_created_response(request, job, *, response_status=status.HTTP_201_CREATED):
+    _remember_anonymous_job(request, job)
+    return Response(_serialize_job(request, job), status=response_status)
+
+
+def _user_can_access_job(request, job):
+    if request.user.is_authenticated:
+        return job.user_id == request.user.id
+
+    session_job_ids = request.session.get(ANONYMOUS_JOB_SESSION_KEY, [])
+    return str(job.id) in session_job_ids
+
+
+def _get_authorized_job(request, job_id):
+    try:
+        job = ProcessingJob.objects.get(id=job_id)
+    except ProcessingJob.DoesNotExist as exc:
+        raise Http404("Job introuvable.") from exc
+
+    if not _user_can_access_job(request, job):
+        return None
+
+    return job
 
 
 class PdfMergeView(APIView):
@@ -39,27 +89,11 @@ class PdfMergeView(APIView):
                 uploaded_files=uploaded_files,
             )
 
-            return Response(
-                ProcessingJobSerializer(
-                    job,
-                    context={"request": request},
-                ).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
-            job = ProcessingJob.objects.order_by("-created_at").first()
-
             return Response(
-                {
-                    "detail": str(exc),
-                    "job": ProcessingJobSerializer(
-                        job,
-                        context={"request": request},
-                    ).data
-                    if job
-                    else None,
-                },
+                {"detail": str(exc)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -91,27 +125,28 @@ class ProcessingJobDetailView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, job_id):
-        try:
-            job = ProcessingJob.objects.get(id=job_id)
-        except ProcessingJob.DoesNotExist:
-            raise Http404("Job introuvable.")
+        job = _get_authorized_job(request, job_id)
 
-        serializer = ProcessingJobSerializer(
-            job,
-            context={"request": request},
-        )
+        if job is None:
+            return Response(
+                {"detail": "Vous n'avez pas accès à ce job."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        return Response(serializer.data)
+        return Response(_serialize_job(request, job))
 
 
 class ProcessingJobDownloadView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request, job_id):
-        try:
-            job = ProcessingJob.objects.get(id=job_id)
-        except ProcessingJob.DoesNotExist:
-            raise Http404("Job introuvable.")
+        job = _get_authorized_job(request, job_id)
+
+        if job is None:
+            return Response(
+                {"detail": "Vous n'avez pas accès à ce job."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         if job.status != ProcessingStatus.COMPLETED:
             return Response(
@@ -166,13 +201,7 @@ class ImageConvertView(APIView):
                 options=options,
             )
 
-            return Response(
-                ProcessingJobSerializer(
-                    job,
-                    context={"request": request},
-                ).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
             return Response(
@@ -218,13 +247,7 @@ class ImageResizeView(APIView):
                 options=options,
             )
 
-            return Response(
-                ProcessingJobSerializer(
-                    job,
-                    context={"request": request},
-                ).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
             return Response(
@@ -267,10 +290,7 @@ class ImageCompressView(APIView):
                 options=options,
             )
 
-            return Response(
-                ProcessingJobSerializer(job, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
             return Response(
@@ -312,10 +332,7 @@ class ImageRotateFlipView(APIView):
                 options=options,
             )
 
-            return Response(
-                ProcessingJobSerializer(job, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
             return Response(
@@ -358,10 +375,7 @@ class ImagesToPdfView(APIView):
                 options=options,
             )
 
-            return Response(
-                ProcessingJobSerializer(job, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
             return Response(
@@ -376,7 +390,7 @@ class ImagesToPdfView(APIView):
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
-        
+
 
 class PdfSplitView(APIView):
     permission_classes = [AllowAny]
@@ -403,10 +417,7 @@ class PdfSplitView(APIView):
                 options=options,
             )
 
-            return Response(
-                ProcessingJobSerializer(job, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
             return Response(
@@ -446,10 +457,7 @@ class PdfRotateView(APIView):
                 options=options,
             )
 
-            return Response(
-                ProcessingJobSerializer(job, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
             return Response(
@@ -489,10 +497,7 @@ class PdfToImagesView(APIView):
                 options=options,
             )
 
-            return Response(
-                ProcessingJobSerializer(job, context={"request": request}).data,
-                status=status.HTTP_201_CREATED,
-            )
+            return _job_created_response(request, job)
 
         except ConverterError as exc:
             return Response(
@@ -511,8 +516,10 @@ class PdfToImagesView(APIView):
             )
 
 
-
 class PdfMergeAsyncView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
     def post(self, request):
         files = request.FILES.getlist("files")
 
@@ -530,13 +537,16 @@ class PdfMergeAsyncView(APIView):
                 )
 
         job = ProcessingJob.objects.create(
-            tool="PDF_MERGE",
-            status="PENDING",
+            user=request.user if request.user.is_authenticated else None,
+            tool=ProcessingTool.PDF_MERGE,
+            status=ProcessingStatus.PENDING,
+            original_filename=", ".join(file.name for file in files)[:255],
+            options={"file_count": len(files), "async": True},
         )
 
         attach_uploaded_files_to_job(job, files)
-
         process_pdf_merge_job.delay(str(job.id))
+        _remember_anonymous_job(request, job)
 
         return Response(
             {
@@ -546,41 +556,3 @@ class PdfMergeAsyncView(APIView):
             },
             status=status.HTTP_202_ACCEPTED,
         )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
