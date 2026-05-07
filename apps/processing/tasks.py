@@ -5,10 +5,16 @@ from celery import shared_task
 from django.utils import timezone
 
 from apps.converters.exceptions import ConverterError
+from apps.converters.pdf.merge import merge_pdf_files
 from apps.converters.pdf.pdf_to_images import pdf_to_images_files
 
 from .models import ProcessingJob, ProcessingStatus
-from .services import complete_processing_job, create_zip_from_files, fail_processing_job
+from .services import (
+    complete_processing_job,
+    create_zip_from_files,
+    fail_processing_job,
+    get_job_input_file_paths,
+)
 
 
 @shared_task
@@ -72,91 +78,73 @@ def process_pdf_to_images_job(job_id):
             "Une erreur inattendue est survenue pendant la conversion PDF vers images.",
         )
         return {"status": "FAILED", "error": str(exc)}
-    
-
-
-
-
-from celery import shared_task
-
-
-import tempfile
-from pathlib import Path
-
-from celery import shared_task
-from django.core.files import File
-from django.utils import timezone
-
-from apps.processing.models import ProcessingJob
-from apps.processing.services import get_job_input_file_paths
-from apps.converters.pdf.merge import merge_pdf_files
 
 
 @shared_task
-def process_pdf_merge_job(job_id: str):
-    job = ProcessingJob.objects.get(id=job_id)
+def process_pdf_merge_job(job_id):
+    try:
+        job = ProcessingJob.objects.get(id=job_id)
+    except ProcessingJob.DoesNotExist:
+        return {"status": "FAILED", "error": "Job introuvable."}
+
+    job.status = ProcessingStatus.PROCESSING
+    if hasattr(job, "started_at"):
+        job.started_at = timezone.now()
+
+    update_fields = ["status"]
+    if hasattr(job, "started_at"):
+        update_fields.append("started_at")
+    if hasattr(job, "updated_at"):
+        update_fields.append("updated_at")
+    job.save(update_fields=update_fields)
+
+    if job.input_files.count() < 2:
+        message = "Au moins deux fichiers PDF sont requis pour la fusion."
+        fail_processing_job(job, message)
+        return {
+            "status": "FAILED",
+            "job_id": str(job.id),
+            "error": message,
+        }
 
     try:
-        job.status = "PROCESSING"
-        if hasattr(job, "started_at"):
-            job.started_at = timezone.now()
-        job.save(update_fields=["status"] + (["started_at"] if hasattr(job, "started_at") else []))
-
-        if job.input_files.count() < 2:
-            raise ValueError("At least two PDF files are required to merge.")
-
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
-
             input_paths = get_job_input_file_paths(job, temp_dir_path)
-
             output_path = temp_dir_path / f"merged_{job.id}.pdf"
 
             merge_pdf_files(
-                input_paths=input_paths,
+                input_paths=[str(path) for path in input_paths],
                 output_path=output_path,
             )
 
             if not output_path.exists():
                 raise RuntimeError("PDF merge failed: output file was not created.")
 
-            with output_path.open("rb") as output_file:
-                job.output_file.save(
-                    f"merged_{job.id}.pdf",
-                    File(output_file),
-                    save=False,
-                )
-
-            job.status = "COMPLETED"
-            if hasattr(job, "completed_at"):
-                job.completed_at = timezone.now()
-
-            update_fields = ["status", "output_file"]
-            if hasattr(job, "completed_at"):
-                update_fields.append("completed_at")
-
-            job.save(update_fields=update_fields)
+            complete_processing_job(
+                job,
+                output_file_path=output_path,
+                output_filename=f"merged_{job.id}.pdf",
+            )
 
         return {
             "status": "COMPLETED",
             "job_id": str(job.id),
         }
 
+    except ConverterError as exc:
+        fail_processing_job(job, exc)
+        return {
+            "status": "FAILED",
+            "job_id": str(job.id),
+            "error": str(exc),
+        }
+
     except Exception as exc:
-        job.status = "FAILED"
-
-        update_fields = ["status"]
-
-        if hasattr(job, "error_message"):
-            job.error_message = str(exc)
-            update_fields.append("error_message")
-
-        if hasattr(job, "completed_at"):
-            job.completed_at = timezone.now()
-            update_fields.append("completed_at")
-
-        job.save(update_fields=update_fields)
-
+        fail_processing_job(
+            job,
+            "Une erreur inattendue est survenue pendant la fusion PDF.",
+        )
         return {
             "status": "FAILED",
             "job_id": str(job.id),
