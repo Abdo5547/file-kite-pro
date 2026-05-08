@@ -16,6 +16,9 @@ class ProcessingStatus(models.TextChoices):
 class ProcessingTool(models.TextChoices):
     PDF_MERGE = "PDF_MERGE", "Merge PDF"
     PDF_SPLIT = "PDF_SPLIT", "Split PDF"
+    PDF_DELETE_PAGES = "PDF_DELETE_PAGES", "Delete Pages"
+    PDF_EXTRACT_PAGES = "PDF_EXTRACT_PAGES", "Extract Pages"
+    PDF_ORGANIZE = "PDF_ORGANIZE", "Organize PDF"
     PDF_ROTATE = "PDF_ROTATE", "Rotate PDF"
     PDF_TO_IMAGES = "PDF_TO_IMAGES", "PDF to Images"
     IMAGES_TO_PDF = "IMAGES_TO_PDF", "Images to PDF"
@@ -84,7 +87,7 @@ class ProcessingJob(models.Model):
 
     def __str__(self):
         return f"{self.tool} - {self.status}"
-    
+
 
 class ProcessingJobFile(models.Model):
     job = models.ForeignKey(
@@ -103,27 +106,3 @@ class ProcessingJobFile(models.Model):
 
     def __str__(self):
         return f"{self.original_filename} ({self.job_id})"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
