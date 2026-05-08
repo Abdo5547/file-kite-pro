@@ -2,13 +2,16 @@ import tempfile
 from pathlib import Path
 
 from apps.converters.exceptions import ConverterError, InvalidFileError
+from apps.converters.pdf.add_attachments import add_attachments_to_pdf_file
 from apps.converters.pdf.add_blank_page import add_blank_page_to_pdf_file
 from apps.converters.pdf.alternate_merge import alternate_merge_pdf_files
 from apps.converters.pdf.combine_single_page import combine_pdf_into_single_page_file
 from apps.converters.pdf.delete_pages import delete_pdf_pages_file
 from apps.converters.pdf.divide_pages import divide_pdf_pages_file
+from apps.converters.pdf.extract_attachments import extract_pdf_attachments
 from apps.converters.pdf.extract_pages import extract_pdf_pages_file
 from apps.converters.pdf.grid_combine import grid_combine_pdf_file, n_up_pdf_file
+from apps.converters.pdf.multi_tool import run_pdf_multi_tool_file
 from apps.converters.pdf.organize import organize_pdf_file
 from apps.converters.pdf.posterize_pdf import posterize_pdf_file
 from apps.converters.pdf.reverse_pages import reverse_pdf_pages_file
@@ -19,11 +22,214 @@ from .models import ProcessingTool
 from .services import (
     complete_processing_job,
     create_processing_job,
+    create_zip_from_files,
     fail_processing_job,
     save_single_uploaded_file_to_temp,
     save_uploaded_files_to_temp,
 )
-from .validators import validate_pdf_file_on_disk, validate_pdf_uploaded_files
+from .validators import (
+    validate_pdf_file_on_disk,
+    validate_pdf_uploaded_files,
+    validate_uploaded_files,
+)
+
+
+def _save_uploaded_attachments_to_temp(uploaded_files, temp_dir_path):
+    attachment_paths = []
+
+    for index, uploaded_file in enumerate(uploaded_files, start=1):
+        safe_name = Path(uploaded_file.name).name or f"attachment_{index}"
+        destination_path = temp_dir_path / f"attachment_{index}_{safe_name}"
+
+        with destination_path.open("wb") as destination:
+            for chunk in uploaded_file.chunks():
+                destination.write(chunk)
+
+        attachment_paths.append(str(destination_path))
+
+    return attachment_paths
+
+
+def run_pdf_add_attachments_job(*, user, uploaded_file, attachment_files, options):
+    limits = get_plan_limits(user)
+    attachment_files = list(attachment_files or [])
+
+    if not attachment_files:
+        raise InvalidFileError("Veuillez envoyer au moins un fichier joint.")
+
+    total_size = validate_uploaded_files([uploaded_file, *attachment_files], limits)
+    validate_pdf_uploaded_files(
+        uploaded_files=[uploaded_file],
+        limits=limits,
+        min_files=1,
+    )
+
+    job = create_processing_job(
+        user=user,
+        tool=ProcessingTool.PDF_ADD_ATTACHMENTS,
+        original_filename=uploaded_file.name,
+        input_size=total_size,
+        options={"attachment_count": len(attachment_files)},
+    )
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            input_path = save_single_uploaded_file_to_temp(
+                uploaded_file=uploaded_file,
+                temp_dir_path=temp_dir_path,
+                suffix=Path(uploaded_file.name).suffix.lower() or ".pdf",
+            )
+            validate_pdf_file_on_disk(input_path)
+
+            attachment_paths = _save_uploaded_attachments_to_temp(
+                uploaded_files=attachment_files,
+                temp_dir_path=temp_dir_path,
+            )
+
+            output_path = temp_dir_path / "attachments_added.pdf"
+            add_attachments_to_pdf_file(
+                input_path=input_path,
+                output_path=str(output_path),
+                attachment_paths=attachment_paths,
+            )
+
+            return complete_processing_job(
+                job,
+                output_file_path=output_path,
+                output_filename="attachments_added.pdf",
+            )
+
+    except ConverterError as exc:
+        fail_processing_job(job, exc)
+        raise
+    except Exception:
+        fail_processing_job(
+            job,
+            "Une erreur inattendue est survenue pendant l'ajout des pieces jointes PDF.",
+        )
+        raise
+
+
+def run_pdf_extract_attachments_job(*, user, uploaded_file, options):
+    limits = get_plan_limits(user)
+    total_size = validate_pdf_uploaded_files(
+        uploaded_files=[uploaded_file],
+        limits=limits,
+        min_files=1,
+    )
+
+    job = create_processing_job(
+        user=user,
+        tool=ProcessingTool.PDF_EXTRACT_ATTACHMENTS,
+        original_filename=uploaded_file.name,
+        input_size=total_size,
+        options=options or {},
+    )
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            input_path = save_single_uploaded_file_to_temp(
+                uploaded_file=uploaded_file,
+                temp_dir_path=temp_dir_path,
+                suffix=Path(uploaded_file.name).suffix.lower() or ".pdf",
+            )
+            validate_pdf_file_on_disk(input_path)
+
+            extracted_dir = temp_dir_path / "pdf_attachments"
+            extracted_files = extract_pdf_attachments(
+                input_path=input_path,
+                output_dir=str(extracted_dir),
+            )
+
+            zip_path = temp_dir_path / "pdf_attachments.zip"
+            create_zip_from_files(
+                file_paths=extracted_files,
+                output_zip_path=zip_path,
+            )
+
+            return complete_processing_job(
+                job,
+                output_file_path=zip_path,
+                output_filename="pdf_attachments.zip",
+            )
+
+    except ConverterError as exc:
+        fail_processing_job(job, exc)
+        raise
+    except Exception:
+        fail_processing_job(
+            job,
+            "Une erreur inattendue est survenue pendant l'extraction des pieces jointes PDF.",
+        )
+        raise
+
+
+def run_pdf_multi_tool_job(*, user, uploaded_file, attachment_files, options):
+    limits = get_plan_limits(user)
+    attachment_files = list(attachment_files or [])
+    uploaded_files = [uploaded_file, *attachment_files]
+    total_size = validate_uploaded_files(uploaded_files, limits)
+    validate_pdf_uploaded_files(
+        uploaded_files=[uploaded_file],
+        limits=limits,
+        min_files=1,
+    )
+
+    operations = options.get("operations") or []
+    if not isinstance(operations, list) or not operations:
+        raise InvalidFileError("Veuillez fournir au moins une operation pour le multi-outil PDF.")
+
+    job = create_processing_job(
+        user=user,
+        tool=ProcessingTool.PDF_MULTI_TOOL,
+        original_filename=uploaded_file.name,
+        input_size=total_size,
+        options={
+            "operations": operations,
+            "attachment_count": len(attachment_files),
+        },
+    )
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            input_path = save_single_uploaded_file_to_temp(
+                uploaded_file=uploaded_file,
+                temp_dir_path=temp_dir_path,
+                suffix=Path(uploaded_file.name).suffix.lower() or ".pdf",
+            )
+            validate_pdf_file_on_disk(input_path)
+
+            attachment_paths = _save_uploaded_attachments_to_temp(
+                uploaded_files=attachment_files,
+                temp_dir_path=temp_dir_path,
+            )
+
+            output_path = temp_dir_path / "pdf_multi_tool_result.pdf"
+            run_pdf_multi_tool_file(
+                input_path=input_path,
+                output_path=str(output_path),
+                operations=operations,
+                attachment_paths=attachment_paths,
+            )
+
+            return complete_processing_job(
+                job,
+                output_file_path=output_path,
+                output_filename="pdf_multi_tool_result.pdf",
+            )
+
+    except ConverterError as exc:
+        fail_processing_job(job, exc)
+        raise
+    except Exception:
+        fail_processing_job(
+            job,
+            "Une erreur inattendue est survenue pendant l'execution du multi-outil PDF.",
+        )
+        raise
 
 
 def run_pdf_delete_pages_job(*, user, uploaded_file, options):
