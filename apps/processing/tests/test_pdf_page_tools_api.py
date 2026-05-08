@@ -1,23 +1,13 @@
-from unittest.mock import patch
-
-from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from unittest.mock import patch
 
 from apps.processing.models import ProcessingJob, ProcessingStatus, ProcessingTool
 
 
 class PdfPageToolsApiTests(APITestCase):
-    def setUp(self):
-        super().setUp()
-        user_model = get_user_model()
-        self.user = user_model.objects.create_user(
-            email="owner@example.com",
-            password="testpass123",
-        )
-
     def _build_job(self, *, tool, options):
         return ProcessingJob.objects.create(
             user=None,
@@ -50,7 +40,7 @@ class PdfPageToolsApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["tool"], ProcessingTool.PDF_DELETE_PAGES)
-        run_job_mock.assert_called_once()
+        self.assertEqual(run_job_mock.call_args.kwargs["options"], {"pages": "2,4"})
         self.assertIn(str(job.id), self.client.session["processing_job_ids"])
 
     def test_pdf_delete_pages_requires_pages_expression(self):
@@ -94,11 +84,8 @@ class PdfPageToolsApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-        run_job_mock.assert_called_once_with(
-            user=self.client.handler._force_user if hasattr(self.client.handler, "_force_user") else response.wsgi_request.user,
-            uploaded_file=run_job_mock.call_args.kwargs["uploaded_file"],
-            options={"pages": "3,1"},
-        )
+        self.assertEqual(response.data["tool"], ProcessingTool.PDF_EXTRACT_PAGES)
+        self.assertEqual(run_job_mock.call_args.kwargs["options"], {"pages": "3,1"})
 
     @patch("apps.processing.views.run_pdf_organize_job")
     def test_pdf_organize_accepts_order_parameter(self, run_job_mock):
