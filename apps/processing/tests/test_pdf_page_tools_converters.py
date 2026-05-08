@@ -6,8 +6,10 @@ from pypdf import PdfReader, PdfWriter
 
 from apps.converters.exceptions import InvalidFileError
 from apps.converters.pdf.add_blank_page import add_blank_page_to_pdf_file
+from apps.converters.pdf.alternate_merge import alternate_merge_pdf_files
 from apps.converters.pdf.delete_pages import delete_pdf_pages_file
 from apps.converters.pdf.extract_pages import extract_pdf_pages_file
+from apps.converters.pdf.grid_combine import grid_combine_pdf_file, n_up_pdf_file
 from apps.converters.pdf.organize import organize_pdf_file
 from apps.converters.pdf.reverse_pages import reverse_pdf_pages_file
 from apps.converters.pdf.rotate_custom import rotate_custom_pdf_file
@@ -23,12 +25,12 @@ class PdfPageToolsConverterTests(TestCase):
         self.temp_dir.cleanup()
         super().tearDown()
 
-    def _create_pdf(self, page_count=4):
-        input_path = self.temp_path / "input.pdf"
+    def _create_pdf(self, page_count=4, *, base_width=200, base_height=300, filename="input.pdf"):
+        input_path = self.temp_path / filename
         writer = PdfWriter()
 
         for index in range(page_count):
-            writer.add_blank_page(width=200 + index, height=300 + index)
+            writer.add_blank_page(width=base_width + index, height=base_height + index)
 
         with input_path.open("wb") as output_file:
             writer.write(output_file)
@@ -140,3 +142,49 @@ class PdfPageToolsConverterTests(TestCase):
         widths = [float(page.mediabox.width) for page in reader.pages]
 
         self.assertEqual(widths, [203.0, 202.0, 201.0, 200.0])
+
+    def test_n_up_pdf_file_groups_pages_on_single_sheet(self):
+        input_path = self._create_pdf(page_count=4)
+        output_path = self.temp_path / "n_up.pdf"
+
+        n_up_pdf_file(
+            input_path=str(input_path),
+            output_path=str(output_path),
+            pages_per_sheet=4,
+        )
+
+        reader = PdfReader(str(output_path))
+        self.assertEqual(len(reader.pages), 1)
+        self.assertEqual(float(reader.pages[0].mediabox.width), 406.0)
+        self.assertEqual(float(reader.pages[0].mediabox.height), 606.0)
+
+    def test_grid_combine_pdf_file_uses_requested_grid(self):
+        input_path = self._create_pdf(page_count=4)
+        output_path = self.temp_path / "grid.pdf"
+
+        grid_combine_pdf_file(
+            input_path=str(input_path),
+            output_path=str(output_path),
+            rows=1,
+            columns=2,
+        )
+
+        reader = PdfReader(str(output_path))
+        self.assertEqual(len(reader.pages), 2)
+        self.assertEqual(float(reader.pages[0].mediabox.width), 406.0)
+        self.assertEqual(float(reader.pages[0].mediabox.height), 303.0)
+
+    def test_alternate_merge_pdf_files_interleaves_two_documents(self):
+        first_path = self._create_pdf(page_count=3, base_width=200, filename="first.pdf")
+        second_path = self._create_pdf(page_count=2, base_width=400, filename="second.pdf")
+        output_path = self.temp_path / "alternate.pdf"
+
+        alternate_merge_pdf_files(
+            input_paths=[str(first_path), str(second_path)],
+            output_path=str(output_path),
+        )
+
+        reader = PdfReader(str(output_path))
+        widths = [float(page.mediabox.width) for page in reader.pages]
+
+        self.assertEqual(widths, [200.0, 400.0, 201.0, 401.0, 202.0])
