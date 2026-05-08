@@ -207,3 +207,108 @@ class PdfPageToolsApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertEqual(response.data["tool"], ProcessingTool.PDF_REVERSE_PAGES)
+
+    @patch("apps.processing.views.run_pdf_n_up_job")
+    def test_pdf_n_up_passes_pages_per_sheet(self, run_job_mock):
+        job = self._build_job(
+            tool=ProcessingTool.PDF_N_UP,
+            options={"pages_per_sheet": 4},
+        )
+        run_job_mock.return_value = job
+
+        response = self.client.post(
+            reverse("processing:pdf-n-up"),
+            data={
+                "file": SimpleUploadedFile(
+                    "input.pdf",
+                    b"%PDF-1.4\ntest\n",
+                    content_type="application/pdf",
+                ),
+                "pages_per_sheet": "4",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["tool"], ProcessingTool.PDF_N_UP)
+        self.assertEqual(run_job_mock.call_args.kwargs["options"], {"pages_per_sheet": "4"})
+
+    @patch("apps.processing.views.run_pdf_grid_combine_job")
+    def test_pdf_grid_combine_passes_grid_dimensions(self, run_job_mock):
+        job = self._build_job(
+            tool=ProcessingTool.PDF_GRID_COMBINE,
+            options={"rows": 2, "columns": 3},
+        )
+        run_job_mock.return_value = job
+
+        response = self.client.post(
+            reverse("processing:pdf-grid-combine"),
+            data={
+                "file": SimpleUploadedFile(
+                    "input.pdf",
+                    b"%PDF-1.4\ntest\n",
+                    content_type="application/pdf",
+                ),
+                "rows": "2",
+                "columns": "3",
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["tool"], ProcessingTool.PDF_GRID_COMBINE)
+        self.assertEqual(
+            run_job_mock.call_args.kwargs["options"],
+            {"rows": "2", "columns": "3"},
+        )
+
+    def test_pdf_alternate_merge_requires_two_files(self):
+        response = self.client.post(
+            reverse("processing:pdf-alternate-merge"),
+            data={
+                "files": [
+                    SimpleUploadedFile(
+                        "first.pdf",
+                        b"%PDF-1.4\ntest\n",
+                        content_type="application/pdf",
+                    )
+                ]
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.data["detail"],
+            "Veuillez envoyer exactement deux fichiers PDF avec le champ 'files'.",
+        )
+
+    @patch("apps.processing.views.run_pdf_alternate_merge_job")
+    def test_pdf_alternate_merge_creates_job(self, run_job_mock):
+        job = self._build_job(
+            tool=ProcessingTool.PDF_ALTERNATE_MERGE,
+            options={"file_count": 2},
+        )
+        run_job_mock.return_value = job
+
+        response = self.client.post(
+            reverse("processing:pdf-alternate-merge"),
+            data={
+                "files": [
+                    SimpleUploadedFile(
+                        "first.pdf",
+                        b"%PDF-1.4\nfirst\n",
+                        content_type="application/pdf",
+                    ),
+                    SimpleUploadedFile(
+                        "second.pdf",
+                        b"%PDF-1.4\nsecond\n",
+                        content_type="application/pdf",
+                    ),
+                ]
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["tool"], ProcessingTool.PDF_ALTERNATE_MERGE)
