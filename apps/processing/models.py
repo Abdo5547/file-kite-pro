@@ -26,6 +26,9 @@ class ProcessingTool(models.TextChoices):
     PDF_N_UP = "PDF_N_UP", "N-Up PDF"
     PDF_GRID_COMBINE = "PDF_GRID_COMBINE", "Grid Combine"
     PDF_ALTERNATE_MERGE = "PDF_ALTERNATE_MERGE", "Alternate Merge"
+    PDF_DIVIDE_PAGES = "PDF_DIVIDE_PAGES", "Divide Pages"
+    PDF_COMBINE_SINGLE_PAGE = "PDF_COMBINE_SINGLE_PAGE", "Combine Single Page"
+    PDF_POSTERIZE = "PDF_POSTERIZE", "Posterize PDF"
     PDF_TO_IMAGES = "PDF_TO_IMAGES", "PDF to Images"
     IMAGES_TO_PDF = "IMAGES_TO_PDF", "Images to PDF"
 
