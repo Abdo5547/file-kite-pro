@@ -8,6 +8,11 @@ from rest_framework.views import APIView
 from apps.converters.exceptions import ConverterError
 
 from .models import ProcessingJob, ProcessingStatus, ProcessingTool
+from .pdf_page_tools import (
+    run_pdf_delete_pages_job,
+    run_pdf_extract_pages_job,
+    run_pdf_organize_job,
+)
 from .serializers import ProcessingJobSerializer
 from .services import (
     attach_uploaded_files_to_job,
@@ -428,6 +433,140 @@ class PdfSplitView(APIView):
         except Exception:
             return Response(
                 {"detail": "Une erreur serveur est survenue pendant la division PDF."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfDeletePagesView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        pages_expression = str(request.data.get("pages", "")).strip()
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not pages_expression:
+            return Response(
+                {"detail": "Veuillez préciser les pages à supprimer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_delete_pages_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={"pages": pages_expression},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant la suppression de pages PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfExtractPagesView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        pages_expression = str(request.data.get("pages", "")).strip()
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not pages_expression:
+            return Response(
+                {"detail": "Veuillez préciser les pages à extraire."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_extract_pages_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={"pages": pages_expression},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant l'extraction de pages PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfOrganizeView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        pages_expression = str(
+            request.data.get("order", request.data.get("pages", ""))
+        ).strip()
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not pages_expression:
+            return Response(
+                {"detail": "Veuillez préciser le nouvel ordre des pages."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_organize_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={"pages": pages_expression},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant la réorganisation PDF."
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
