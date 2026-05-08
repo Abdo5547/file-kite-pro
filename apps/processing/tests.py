@@ -1,7 +1,7 @@
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 
@@ -9,6 +9,13 @@ from apps.accounts.models import User
 
 from .access import generate_processing_job_access_token
 from .models import ProcessingJob, ProcessingStatus, ProcessingTool
+from .secure_views import (
+    SecurePdfMergeAsyncView,
+    SecurePdfToImagesView,
+    SecureProcessingJobDetailView,
+    SecureProcessingJobDownloadView,
+)
+from .views import ImageConvertView, PdfMergeView, ProcessingJobListView
 
 
 class ProcessingJobAccessTests(TestCase):
@@ -170,3 +177,52 @@ class ProcessingEndpointHardeningTests(TestCase):
         self.assertIn("access_token", response.data)
         self.assertIsNotNone(response.data["access_token"])
         mocked_delay.assert_called_once()
+
+
+class ProcessingThrottleScopeTests(TestCase):
+    def test_public_processing_upload_views_have_upload_throttle_scope(self):
+        upload_views = [
+            PdfMergeView,
+            SecurePdfMergeAsyncView,
+            SecurePdfToImagesView,
+            ImageConvertView,
+        ]
+
+        for view_class in upload_views:
+            with self.subTest(view=view_class.__name__):
+                self.assertEqual(view_class.throttle_scope, "processing_upload")
+
+    def test_processing_job_views_have_poll_throttle_scope(self):
+        job_views = [
+            ProcessingJobListView,
+            SecureProcessingJobDetailView,
+            SecureProcessingJobDownloadView,
+        ]
+
+        for view_class in job_views:
+            with self.subTest(view=view_class.__name__):
+                self.assertEqual(view_class.throttle_scope, "processing_job_poll")
+
+    @override_settings(
+        REST_FRAMEWORK={
+            "DEFAULT_AUTHENTICATION_CLASSES": [
+                "rest_framework.authentication.SessionAuthentication",
+            ],
+            "DEFAULT_PERMISSION_CLASSES": [
+                "rest_framework.permissions.AllowAny",
+            ],
+            "DEFAULT_THROTTLE_CLASSES": [
+                "rest_framework.throttling.ScopedRateThrottle",
+            ],
+            "DEFAULT_THROTTLE_RATES": {
+                "processing_upload": "1/minute",
+                "processing_job_poll": "120/minute",
+            },
+        }
+    )
+    def test_processing_upload_throttle_is_enforced(self):
+        first_response = self.client.post(reverse("processing:pdf-merge"), {}, format="multipart")
+        second_response = self.client.post(reverse("processing:pdf-merge"), {}, format="multipart")
+
+        self.assertEqual(first_response.status_code, 400)
+        self.assertEqual(second_response.status_code, 429)
