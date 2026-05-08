@@ -29,6 +29,9 @@ class ProcessingTool(models.TextChoices):
     PDF_DIVIDE_PAGES = "PDF_DIVIDE_PAGES", "Divide Pages"
     PDF_COMBINE_SINGLE_PAGE = "PDF_COMBINE_SINGLE_PAGE", "Combine Single Page"
     PDF_POSTERIZE = "PDF_POSTERIZE", "Posterize PDF"
+    PDF_MULTI_TOOL = "PDF_MULTI_TOOL", "PDF Multi Tool"
+    PDF_ADD_ATTACHMENTS = "PDF_ADD_ATTACHMENTS", "Add Attachments"
+    PDF_EXTRACT_ATTACHMENTS = "PDF_EXTRACT_ATTACHMENTS", "Extract Attachments"
     PDF_TO_IMAGES = "PDF_TO_IMAGES", "PDF to Images"
     IMAGES_TO_PDF = "IMAGES_TO_PDF", "Images to PDF"
 
