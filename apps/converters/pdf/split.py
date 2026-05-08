@@ -58,15 +58,24 @@ def split_pdf_file(
         raise InvalidFileError("Impossible de diviser ce fichier PDF.") from exc
 
 
-def parse_pages_expression(expression: str) -> list[int]:
+def parse_pages_expression(
+    expression: str,
+    *,
+    preserve_order: bool = False,
+) -> list[int]:
     """
     Convertit une expression comme:
-    "1,3,5-7" → [1, 3, 5, 6, 7]
+    "1,3,5-7" -> [1, 3, 5, 6, 7]
+
+    Par défaut, les pages sont dédupliquées et triées.
+    Avec ``preserve_order=True``, l'ordre de saisie est conservé et
+    les doublons sont rejetés.
     """
     if not expression:
-        raise InvalidFileError("Veuillez fournir les pages à extraire.")
+        raise InvalidFileError("Veuillez fournir les pages à traiter.")
 
-    pages = set()
+    ordered_pages: list[int] = []
+    unique_pages: set[int] = set()
 
     parts = expression.replace(" ", "").split(",")
 
@@ -74,28 +83,42 @@ def parse_pages_expression(expression: str) -> list[int]:
         if not part:
             continue
 
-        if "-" in part:
-            start_raw, end_raw = part.split("-", 1)
+        for page_number in _expand_page_part(part):
+            if preserve_order:
+                if page_number in unique_pages:
+                    raise InvalidFileError(
+                        "Chaque page ne peut être fournie qu'une seule fois."
+                    )
 
-            if not start_raw.isdigit() or not end_raw.isdigit():
-                raise InvalidFileError("Format de pages invalide.")
+                ordered_pages.append(page_number)
+                unique_pages.add(page_number)
+            else:
+                unique_pages.add(page_number)
 
-            start = int(start_raw)
-            end = int(end_raw)
+    result = ordered_pages if preserve_order else sorted(unique_pages)
 
-            if start > end:
-                raise InvalidFileError("La plage de pages est invalide.")
-
-            for page in range(start, end + 1):
-                pages.add(page)
-
-        else:
-            if not part.isdigit():
-                raise InvalidFileError("Format de pages invalide.")
-
-            pages.add(int(part))
-
-    if not pages:
+    if not result:
         raise InvalidFileError("Aucune page valide fournie.")
 
-    return sorted(pages)
+    return result
+
+
+def _expand_page_part(part: str) -> list[int]:
+    if "-" in part:
+        start_raw, end_raw = part.split("-", 1)
+
+        if not start_raw.isdigit() or not end_raw.isdigit():
+            raise InvalidFileError("Format de pages invalide.")
+
+        start = int(start_raw)
+        end = int(end_raw)
+
+        if start > end:
+            raise InvalidFileError("La plage de pages est invalide.")
+
+        return list(range(start, end + 1))
+
+    if not part.isdigit():
+        raise InvalidFileError("Format de pages invalide.")
+
+    return [int(part)]
