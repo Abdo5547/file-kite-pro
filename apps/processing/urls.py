@@ -6,14 +6,17 @@ from .views import (
     ImageResizeView,
     ImageRotateFlipView,
     ImagesToPdfView,
+    PdfDeletePagesView,
+    PdfExtractPagesView,
+    PdfMergeAsyncView,
     PdfMergeView,
+    PdfOrganizeView,
     PdfRotateView,
     PdfSplitView,
     PdfToImagesView,
     ProcessingJobDetailView,
     ProcessingJobDownloadView,
     ProcessingJobListView,
-    PdfMergeAsyncView,
 )
 
 
@@ -23,6 +26,9 @@ urlpatterns = [
     path("pdf/merge/", PdfMergeView.as_view(), name="pdf-merge"),
     path("pdf/images-to-pdf/", ImagesToPdfView.as_view(), name="images-to-pdf"),
     path("pdf/split/", PdfSplitView.as_view(), name="pdf-split"),
+    path("pdf/delete-pages/", PdfDeletePagesView.as_view(), name="pdf-delete-pages"),
+    path("pdf/extract-pages/", PdfExtractPagesView.as_view(), name="pdf-extract-pages"),
+    path("pdf/organize/", PdfOrganizeView.as_view(), name="pdf-organize"),
     path("pdf/rotate/", PdfRotateView.as_view(), name="pdf-rotate"),
     path("pdf/to-images/", PdfToImagesView.as_view(), name="pdf-to-images"),
     path("pdf/merge/async/", PdfMergeAsyncView.as_view(), name="pdf-merge-async"),
