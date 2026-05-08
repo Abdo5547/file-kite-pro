@@ -15,6 +15,7 @@ from .services import (
     fail_processing_job,
     get_job_input_file_paths,
 )
+from .validators import validate_pdf_file_on_disk
 
 
 @shared_task
@@ -38,14 +39,12 @@ def process_pdf_to_images_job(job_id):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
-
             input_path = temp_dir_path / "input.pdf"
 
             with job.input_file.open("rb") as source:
                 input_path.write_bytes(source.read())
 
             output_dir = temp_dir_path / "pdf_images"
-
             image_paths = pdf_to_images_files(
                 input_path=str(input_path),
                 output_dir=str(output_dir),
@@ -54,7 +53,6 @@ def process_pdf_to_images_job(job_id):
             )
 
             zip_path = temp_dir_path / "pdf_images.zip"
-
             create_zip_from_files(
                 file_paths=image_paths,
                 output_zip_path=zip_path,
@@ -111,8 +109,11 @@ def process_pdf_merge_job(job_id):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
             input_paths = get_job_input_file_paths(job, temp_dir_path)
-            output_path = temp_dir_path / f"merged_{job.id}.pdf"
 
+            for input_path in input_paths:
+                validate_pdf_file_on_disk(input_path)
+
+            output_path = temp_dir_path / f"merged_{job.id}.pdf"
             merge_pdf_files(
                 input_paths=[str(path) for path in input_paths],
                 output_path=output_path,
