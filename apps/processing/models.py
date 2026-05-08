@@ -23,6 +23,9 @@ class ProcessingTool(models.TextChoices):
     PDF_ROTATE_CUSTOM = "PDF_ROTATE_CUSTOM", "Rotate Custom"
     PDF_ADD_BLANK_PAGE = "PDF_ADD_BLANK_PAGE", "Add Blank Page"
     PDF_REVERSE_PAGES = "PDF_REVERSE_PAGES", "Reverse Pages"
+    PDF_N_UP = "PDF_N_UP", "N-Up PDF"
+    PDF_GRID_COMBINE = "PDF_GRID_COMBINE", "Grid Combine"
+    PDF_ALTERNATE_MERGE = "PDF_ALTERNATE_MERGE", "Alternate Merge"
     PDF_TO_IMAGES = "PDF_TO_IMAGES", "PDF to Images"
     IMAGES_TO_PDF = "IMAGES_TO_PDF", "Images to PDF"
 
