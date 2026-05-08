@@ -37,6 +37,43 @@ from .views_extra import PdfEditAttachmentsView, PdfToZipView
 
 app_name = "processing"
 
+PROCESSING_UPLOAD_VIEWS = (
+    PdfMergeView,
+    ImagesToPdfView,
+    PdfSplitView,
+    PdfDeletePagesView,
+    PdfExtractPagesView,
+    PdfOrganizeView,
+    PdfRotateCustomView,
+    PdfAddBlankPageView,
+    PdfReversePagesView,
+    PdfNUpView,
+    PdfGridCombineView,
+    PdfAlternateMergeView,
+    PdfDividePagesView,
+    PdfCombineSinglePageView,
+    PdfPosterizeView,
+    PdfMultiToolView,
+    PdfAddAttachmentsView,
+    PdfExtractAttachmentsView,
+    PdfEditAttachmentsView,
+    PdfToZipView,
+    PdfRotateView,
+    SecurePdfToImagesView,
+    SecurePdfMergeAsyncView,
+    ImageConvertView,
+    ImageResizeView,
+    ImageCompressView,
+    ImageRotateFlipView,
+)
+
+for view_class in PROCESSING_UPLOAD_VIEWS:
+    view_class.throttle_scope = "processing_upload"
+
+SecureProcessingJobDetailView.throttle_scope = "processing_job_poll"
+SecureProcessingJobDownloadView.throttle_scope = "processing_job_poll"
+ProcessingJobListView.throttle_scope = "processing_job_poll"
+
 urlpatterns = [
     path("pdf/merge/", PdfMergeView.as_view(), name="pdf-merge"),
     path("pdf/images-to-pdf/", ImagesToPdfView.as_view(), name="images-to-pdf"),
