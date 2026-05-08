@@ -9,9 +9,12 @@ from apps.converters.exceptions import ConverterError
 
 from .models import ProcessingJob, ProcessingStatus, ProcessingTool
 from .pdf_page_tools import (
+    run_pdf_add_blank_page_job,
     run_pdf_delete_pages_job,
     run_pdf_extract_pages_job,
     run_pdf_organize_job,
+    run_pdf_reverse_pages_job,
+    run_pdf_rotate_custom_job,
 )
 from .serializers import ProcessingJobSerializer
 from .services import (
@@ -566,6 +569,139 @@ class PdfOrganizeView(APIView):
             return Response(
                 {
                     "detail": "Une erreur serveur est survenue pendant la réorganisation PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfRotateCustomView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        rotations_expression = str(
+            request.data.get("rotations", request.data.get("pages", ""))
+        ).strip()
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not rotations_expression:
+            return Response(
+                {"detail": "Veuillez préciser les rotations personnalisées."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_rotate_custom_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={"rotations": rotations_expression},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant la rotation personnalisée PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfAddBlankPageView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        position = str(request.data.get("position", "after")).strip().lower()
+        page_raw = request.data.get("page")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if position in {"before", "after"} and page_raw in (None, "", "null"):
+            return Response(
+                {"detail": "Veuillez préciser la page cible pour l'insertion."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_add_blank_page_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={
+                    "position": position,
+                    "page": page_raw,
+                    "width": request.data.get("width"),
+                    "height": request.data.get("height"),
+                },
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant l'ajout d'une page blanche."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfReversePagesView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_reverse_pages_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant l'inversion des pages PDF."
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
