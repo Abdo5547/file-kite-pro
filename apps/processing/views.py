@@ -1,3 +1,5 @@
+import json
+
 from django.http import FileResponse, Http404
 from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
@@ -9,13 +11,16 @@ from apps.converters.exceptions import ConverterError
 
 from .models import ProcessingJob, ProcessingStatus, ProcessingTool
 from .pdf_page_tools import (
+    run_pdf_add_attachments_job,
     run_pdf_add_blank_page_job,
     run_pdf_alternate_merge_job,
     run_pdf_combine_single_page_job,
     run_pdf_delete_pages_job,
     run_pdf_divide_pages_job,
+    run_pdf_extract_attachments_job,
     run_pdf_extract_pages_job,
     run_pdf_grid_combine_job,
+    run_pdf_multi_tool_job,
     run_pdf_n_up_job,
     run_pdf_organize_job,
     run_pdf_posterize_job,
@@ -90,6 +95,29 @@ def _get_authorized_job(request, job_id):
     return job
 
 
+def _parse_operations_payload(raw_operations):
+    if raw_operations in (None, "", []):
+        raise ConverterError("Veuillez fournir la liste des operations a executer.")
+
+    if isinstance(raw_operations, str):
+        try:
+            operations = json.loads(raw_operations)
+        except json.JSONDecodeError as exc:
+            raise ConverterError(
+                "Le champ 'operations' doit contenir un JSON valide."
+            ) from exc
+    else:
+        operations = raw_operations
+
+    if not isinstance(operations, list) or not operations:
+        raise ConverterError("Le champ 'operations' doit etre une liste non vide.")
+
+    if not all(isinstance(operation, dict) for operation in operations):
+        raise ConverterError("Chaque operation doit etre un objet JSON.")
+
+    return operations
+
+
 class PdfMergeView(APIView):
     permission_classes = [AllowAny]
     parser_classes = [MultiPartParser, FormParser]
@@ -113,9 +141,7 @@ class PdfMergeView(APIView):
 
         except Exception:
             return Response(
-                {
-                    "detail": "Une erreur serveur est survenue pendant la fusion PDF."
-                },
+                {"detail": "Une erreur serveur est survenue pendant la fusion PDF."},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -314,7 +340,9 @@ class ImageCompressView(APIView):
 
         except Exception:
             return Response(
-                {"detail": "Une erreur serveur est survenue pendant la compression image."},
+                {
+                    "detail": "Une erreur serveur est survenue pendant la compression image."
+                },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
 
@@ -797,7 +825,9 @@ class PdfAlternateMergeView(APIView):
 
         if len(uploaded_files) != 2:
             return Response(
-                {"detail": "Veuillez envoyer exactement deux fichiers PDF avec le champ 'files'."},
+                {
+                    "detail": "Veuillez envoyer exactement deux fichiers PDF avec le champ 'files'."
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -935,6 +965,130 @@ class PdfPosterizeView(APIView):
             return Response(
                 {
                     "detail": "Une erreur serveur est survenue pendant la posterisation PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfMultiToolView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        attachment_files = request.FILES.getlist("attachments")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            operations = _parse_operations_payload(request.data.get("operations"))
+            job = run_pdf_multi_tool_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                attachment_files=attachment_files,
+                options={"operations": operations},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant l'execution du multi-outil PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfAddAttachmentsView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        attachment_files = request.FILES.getlist("attachments")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if not attachment_files:
+            return Response(
+                {
+                    "detail": "Veuillez envoyer au moins un fichier joint avec le champ 'attachments'."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_add_attachments_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                attachment_files=attachment_files,
+                options={},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant l'ajout des pieces jointes PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfExtractAttachmentsView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_extract_attachments_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant l'extraction des pieces jointes PDF."
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
