@@ -5,9 +5,12 @@ from unittest import TestCase
 from pypdf import PdfReader, PdfWriter
 
 from apps.converters.exceptions import InvalidFileError
+from apps.converters.pdf.add_blank_page import add_blank_page_to_pdf_file
 from apps.converters.pdf.delete_pages import delete_pdf_pages_file
 from apps.converters.pdf.extract_pages import extract_pdf_pages_file
 from apps.converters.pdf.organize import organize_pdf_file
+from apps.converters.pdf.reverse_pages import reverse_pdf_pages_file
+from apps.converters.pdf.rotate_custom import rotate_custom_pdf_file
 
 
 class PdfPageToolsConverterTests(TestCase):
@@ -25,7 +28,7 @@ class PdfPageToolsConverterTests(TestCase):
         writer = PdfWriter()
 
         for index in range(page_count):
-            writer.add_blank_page(width=200 + index, height=300)
+            writer.add_blank_page(width=200 + index, height=300 + index)
 
         with input_path.open("wb") as output_file:
             writer.write(output_file)
@@ -88,3 +91,52 @@ class PdfPageToolsConverterTests(TestCase):
                 output_path=str(output_path),
                 page_order_expression="3,1,2",
             )
+
+    def test_rotate_custom_pdf_file_rotates_selected_pages(self):
+        input_path = self._create_pdf(page_count=4)
+        output_path = self.temp_path / "rotated_custom.pdf"
+
+        rotate_custom_pdf_file(
+            input_path=str(input_path),
+            output_path=str(output_path),
+            rotations_expression="1:90,3:270",
+        )
+
+        reader = PdfReader(str(output_path))
+        rotations = [int(page.get("/Rotate", 0)) for page in reader.pages]
+
+        self.assertEqual(rotations, [90, 0, 270, 0])
+
+    def test_add_blank_page_to_pdf_file_inserts_page_after_target(self):
+        input_path = self._create_pdf(page_count=3)
+        output_path = self.temp_path / "blank_added.pdf"
+
+        add_blank_page_to_pdf_file(
+            input_path=str(input_path),
+            output_path=str(output_path),
+            position="after",
+            page_number=1,
+        )
+
+        reader = PdfReader(str(output_path))
+        dimensions = [
+            (float(page.mediabox.width), float(page.mediabox.height))
+            for page in reader.pages
+        ]
+
+        self.assertEqual(len(reader.pages), 4)
+        self.assertEqual(dimensions[1], dimensions[0])
+
+    def test_reverse_pdf_pages_file_reverses_page_order(self):
+        input_path = self._create_pdf(page_count=4)
+        output_path = self.temp_path / "reversed.pdf"
+
+        reverse_pdf_pages_file(
+            input_path=str(input_path),
+            output_path=str(output_path),
+        )
+
+        reader = PdfReader(str(output_path))
+        widths = [float(page.mediabox.width) for page in reader.pages]
+
+        self.assertEqual(widths, [203.0, 202.0, 201.0, 200.0])
