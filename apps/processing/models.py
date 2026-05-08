@@ -32,6 +32,9 @@ class ProcessingTool(models.TextChoices):
     PDF_MULTI_TOOL = "PDF_MULTI_TOOL", "PDF Multi Tool"
     PDF_ADD_ATTACHMENTS = "PDF_ADD_ATTACHMENTS", "Add Attachments"
     PDF_EXTRACT_ATTACHMENTS = "PDF_EXTRACT_ATTACHMENTS", "Extract Attachments"
+    PDF_EDIT_ATTACHMENTS = "PDF_EDIT_ATTACHMENTS", "Edit Attachments"
+    PDF_TO_ZIP = "PDF_TO_ZIP", "PDF to ZIP"
+    PDF_OCR = "PDF_OCR", "OCR PDF"
     PDF_TO_IMAGES = "PDF_TO_IMAGES", "PDF to Images"
     IMAGES_TO_PDF = "IMAGES_TO_PDF", "Images to PDF"
 
