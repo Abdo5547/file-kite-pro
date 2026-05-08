@@ -11,11 +11,14 @@ from .models import ProcessingJob, ProcessingStatus, ProcessingTool
 from .pdf_page_tools import (
     run_pdf_add_blank_page_job,
     run_pdf_alternate_merge_job,
+    run_pdf_combine_single_page_job,
     run_pdf_delete_pages_job,
+    run_pdf_divide_pages_job,
     run_pdf_extract_pages_job,
     run_pdf_grid_combine_job,
     run_pdf_n_up_job,
     run_pdf_organize_job,
+    run_pdf_posterize_job,
     run_pdf_reverse_pages_job,
     run_pdf_rotate_custom_job,
 )
@@ -817,6 +820,121 @@ class PdfAlternateMergeView(APIView):
             return Response(
                 {
                     "detail": "Une erreur serveur est survenue pendant la fusion alternée PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfDividePagesView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        mode = str(request.data.get("mode", "vertical")).strip().lower()
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_divide_pages_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={"mode": mode},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant la division des pages PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfCombineSinglePageView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_combine_single_page_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={"gap": request.data.get("gap", 0)},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant la combinaison sur une seule page."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfPosterizeView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_posterize_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={
+                    "rows": request.data.get("rows", 2),
+                    "columns": request.data.get("columns", 2),
+                },
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant la posterisation PDF."
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
