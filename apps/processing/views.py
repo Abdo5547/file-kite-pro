@@ -10,8 +10,11 @@ from apps.converters.exceptions import ConverterError
 from .models import ProcessingJob, ProcessingStatus, ProcessingTool
 from .pdf_page_tools import (
     run_pdf_add_blank_page_job,
+    run_pdf_alternate_merge_job,
     run_pdf_delete_pages_job,
     run_pdf_extract_pages_job,
+    run_pdf_grid_combine_job,
+    run_pdf_n_up_job,
     run_pdf_organize_job,
     run_pdf_reverse_pages_job,
     run_pdf_rotate_custom_job,
@@ -702,6 +705,118 @@ class PdfReversePagesView(APIView):
             return Response(
                 {
                     "detail": "Une erreur serveur est survenue pendant l'inversion des pages PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfNUpView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_n_up_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={"pages_per_sheet": request.data.get("pages_per_sheet", 4)},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {"detail": "Une erreur serveur est survenue pendant la composition n-up PDF."},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfGridCombineView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+
+        if not uploaded_file:
+            return Response(
+                {"detail": "Veuillez envoyer un PDF avec le champ 'file'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_grid_combine_job(
+                user=request.user,
+                uploaded_file=uploaded_file,
+                options={
+                    "rows": request.data.get("rows", 2),
+                    "columns": request.data.get("columns", 2),
+                },
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant la combinaison en grille PDF."
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+
+class PdfAlternateMergeView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_files = request.FILES.getlist("files")
+
+        if len(uploaded_files) != 2:
+            return Response(
+                {"detail": "Veuillez envoyer exactement deux fichiers PDF avec le champ 'files'."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            job = run_pdf_alternate_merge_job(
+                user=request.user,
+                uploaded_files=uploaded_files,
+                options={},
+            )
+
+            return _job_created_response(request, job)
+
+        except ConverterError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        except Exception:
+            return Response(
+                {
+                    "detail": "Une erreur serveur est survenue pendant la fusion alternée PDF."
                 },
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
             )
