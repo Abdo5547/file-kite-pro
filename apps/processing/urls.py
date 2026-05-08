@@ -1,5 +1,11 @@
 from django.urls import path
 
+from .secure_views import (
+    SecurePdfMergeAsyncView,
+    SecurePdfToImagesView,
+    SecureProcessingJobDetailView,
+    SecureProcessingJobDownloadView,
+)
 from .views import (
     ImageCompressView,
     ImageConvertView,
@@ -15,7 +21,6 @@ from .views import (
     PdfExtractAttachmentsView,
     PdfExtractPagesView,
     PdfGridCombineView,
-    PdfMergeAsyncView,
     PdfMergeView,
     PdfMultiToolView,
     PdfNUpView,
@@ -25,9 +30,6 @@ from .views import (
     PdfRotateCustomView,
     PdfRotateView,
     PdfSplitView,
-    PdfToImagesView,
-    ProcessingJobDetailView,
-    ProcessingJobDownloadView,
     ProcessingJobListView,
 )
 from .views_extra import PdfEditAttachmentsView, PdfToZipView
@@ -57,11 +59,15 @@ urlpatterns = [
     path("pdf/edit-attachments/", PdfEditAttachmentsView.as_view(), name="pdf-edit-attachments"),
     path("pdf/to-zip/", PdfToZipView.as_view(), name="pdf-to-zip"),
     path("pdf/rotate/", PdfRotateView.as_view(), name="pdf-rotate"),
-    path("pdf/to-images/", PdfToImagesView.as_view(), name="pdf-to-images"),
-    path("pdf/merge/async/", PdfMergeAsyncView.as_view(), name="pdf-merge-async"),
+    path("pdf/to-images/", SecurePdfToImagesView.as_view(), name="pdf-to-images"),
+    path("pdf/merge/async/", SecurePdfMergeAsyncView.as_view(), name="pdf-merge-async"),
     path("jobs/", ProcessingJobListView.as_view(), name="job-list"),
-    path("jobs/<uuid:job_id>/", ProcessingJobDetailView.as_view(), name="job-detail"),
-    path("jobs/<uuid:job_id>/download/", ProcessingJobDownloadView.as_view(), name="job-download"),
+    path("jobs/<uuid:job_id>/", SecureProcessingJobDetailView.as_view(), name="job-detail"),
+    path(
+        "jobs/<uuid:job_id>/download/",
+        SecureProcessingJobDownloadView.as_view(),
+        name="job-download",
+    ),
     path("images/convert/", ImageConvertView.as_view(), name="image-convert"),
     path("images/resize/", ImageResizeView.as_view(), name="image-resize"),
     path("images/compress/", ImageCompressView.as_view(), name="image-compress"),
