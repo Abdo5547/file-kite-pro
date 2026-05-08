@@ -98,6 +98,19 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
     ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.ScopedRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "processing_upload": config(
+            "PROCESSING_UPLOAD_THROTTLE_RATE",
+            default="30/minute",
+        ),
+        "processing_job_poll": config(
+            "PROCESSING_JOB_POLL_THROTTLE_RATE",
+            default="120/minute",
+        ),
+    },
 }
 
 CORS_ALLOWED_ORIGINS = config(
@@ -136,8 +149,6 @@ MEDIA_ROOT = BASE_DIR / "media"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
-
-
 
 
 CELERY_BROKER_URL = config(
