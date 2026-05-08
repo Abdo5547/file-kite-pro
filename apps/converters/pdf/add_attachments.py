@@ -32,7 +32,11 @@ def add_attachments_to_pdf_file(
         writer = PdfWriter()
         writer.clone_document_from_reader(reader)
 
-        used_names: set[str] = set()
+        used_names = {
+            attachment.name
+            for attachment in reader.attachment_list
+            if getattr(attachment, "name", None)
+        }
 
         for index, attachment_path_raw in enumerate(attachment_paths, start=1):
             attachment_path = Path(attachment_path_raw)
