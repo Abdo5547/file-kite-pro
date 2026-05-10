@@ -26,6 +26,7 @@ class ProcessingTool(models.TextChoices):
     PDF_FIND_AND_REDACT = "PDF_FIND_AND_REDACT", "Find And Redact"
     PDF_REMOVE_METADATA = "PDF_REMOVE_METADATA", "Remove Metadata"
     PDF_CHANGE_PERMISSIONS = "PDF_CHANGE_PERMISSIONS", "Change Permissions"
+    PDF_FLATTEN = "PDF_FLATTEN", "Flatten PDF"
 
     IMAGE_CONVERT = "IMAGE_CONVERT", "Convert Image"
     IMAGE_RESIZE = "IMAGE_RESIZE", "Resize Image"
