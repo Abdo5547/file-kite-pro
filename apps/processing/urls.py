@@ -1,11 +1,18 @@
 from django.urls import path
 
+from .image_views import (
+    ImageConvertFromJpgView,
+    ImageConvertToJpgView,
+    ImageCropView,
+    ImageRotateBatchView,
+)
 from .views import (
     ImageCompressView,
     ImageConvertView,
     ImageResizeView,
     ImageRotateFlipView,
     ImagesToPdfView,
+    PdfMergeAsyncView,
     PdfMergeView,
     PdfRotateView,
     PdfSplitView,
@@ -13,7 +20,6 @@ from .views import (
     ProcessingJobDetailView,
     ProcessingJobDownloadView,
     ProcessingJobListView,
-    PdfMergeAsyncView,
 )
 
 
@@ -34,7 +40,11 @@ urlpatterns = [
         name="job-download",
     ),
     path("images/convert/", ImageConvertView.as_view(), name="image-convert"),
+    path("images/convert-to-jpg/", ImageConvertToJpgView.as_view(), name="image-convert-to-jpg"),
+    path("images/convert-from-jpg/", ImageConvertFromJpgView.as_view(), name="image-convert-from-jpg"),
     path("images/resize/", ImageResizeView.as_view(), name="image-resize"),
     path("images/compress/", ImageCompressView.as_view(), name="image-compress"),
     path("images/rotate-flip/", ImageRotateFlipView.as_view(), name="image-rotate-flip"),
+    path("images/rotate-batch/", ImageRotateBatchView.as_view(), name="image-rotate-batch"),
+    path("images/crop/", ImageCropView.as_view(), name="image-crop"),
 ]
