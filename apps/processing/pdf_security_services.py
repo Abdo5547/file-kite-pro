@@ -4,6 +4,7 @@ from pathlib import Path
 from apps.converters.exceptions import ConverterError
 from apps.converters.pdf.decrypt import decrypt_pdf_file
 from apps.converters.pdf.encrypt import encrypt_pdf_file
+from apps.converters.pdf.flatten import flatten_pdf_file
 from apps.converters.pdf.metadata import remove_pdf_metadata
 from apps.converters.pdf.permissions import change_pdf_permissions
 from apps.converters.pdf.redact import find_and_redact_text_in_pdf
@@ -295,4 +296,41 @@ def run_find_and_redact_pdf_job(*, user, uploaded_file, options):
         raise
     except Exception:
         fail_processing_job(job, "Une erreur inattendue est survenue pendant le masquage du texte PDF.")
+        raise
+
+
+def run_flatten_pdf_job(*, user, uploaded_file, options):
+    job = _create_single_pdf_job(
+        user=user,
+        uploaded_file=uploaded_file,
+        tool=ProcessingTool.PDF_FLATTEN,
+        options={},
+    )
+
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            input_path = save_single_uploaded_file_to_temp(
+                uploaded_file=uploaded_file,
+                temp_dir_path=temp_dir_path,
+                suffix=".pdf",
+            )
+            output_path = temp_dir_path / "flattened_document.pdf"
+
+            flatten_pdf_file(
+                input_path=input_path,
+                output_path=str(output_path),
+            )
+
+            return complete_processing_job(
+                job,
+                output_file_path=output_path,
+                output_filename="flattened_document.pdf",
+            )
+
+    except ConverterError as exc:
+        fail_processing_job(job, exc)
+        raise
+    except Exception:
+        fail_processing_job(job, "Une erreur inattendue est survenue pendant l'aplatissement du PDF.")
         raise
