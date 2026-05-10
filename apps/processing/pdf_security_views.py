@@ -11,6 +11,7 @@ from .pdf_security_services import (
     run_change_permissions_pdf_job,
     run_decrypt_pdf_job,
     run_encrypt_pdf_job,
+    run_flatten_pdf_job,
     run_find_and_redact_pdf_job,
     run_remove_metadata_pdf_job,
     run_sanitize_pdf_job,
@@ -173,6 +174,24 @@ class FindAndRedactPdfView(APIView):
             runner=run_find_and_redact_pdf_job,
             options=options,
             generic_error="Une erreur serveur est survenue pendant le masquage du texte PDF.",
+        )
+
+
+class FlattenPdfView(APIView):
+    permission_classes = [AllowAny]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        uploaded_file = request.FILES.get("file")
+        if not uploaded_file:
+            return Response({"detail": "Veuillez envoyer un PDF avec le champ 'file'."}, status=status.HTTP_400_BAD_REQUEST)
+
+        return _run_single_file_job(
+            request=request,
+            uploaded_file=uploaded_file,
+            runner=run_flatten_pdf_job,
+            options={},
+            generic_error="Une erreur serveur est survenue pendant l'aplatissement du PDF.",
         )
 
 
