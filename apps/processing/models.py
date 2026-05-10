@@ -19,11 +19,23 @@ class ProcessingTool(models.TextChoices):
     PDF_ROTATE = "PDF_ROTATE", "Rotate PDF"
     PDF_TO_IMAGES = "PDF_TO_IMAGES", "PDF to Images"
     IMAGES_TO_PDF = "IMAGES_TO_PDF", "Images to PDF"
+    PDF_REMOVE_RESTRICTIONS = "PDF_REMOVE_RESTRICTIONS", "Remove Restrictions"
+    PDF_ENCRYPT = "PDF_ENCRYPT", "Encrypt PDF"
+    PDF_DECRYPT = "PDF_DECRYPT", "Decrypt PDF"
+    PDF_SANITIZE = "PDF_SANITIZE", "Sanitize PDF"
+    PDF_FIND_AND_REDACT = "PDF_FIND_AND_REDACT", "Find And Redact"
+    PDF_REMOVE_METADATA = "PDF_REMOVE_METADATA", "Remove Metadata"
+    PDF_CHANGE_PERMISSIONS = "PDF_CHANGE_PERMISSIONS", "Change Permissions"
+    PDF_FLATTEN = "PDF_FLATTEN", "Flatten PDF"
 
     IMAGE_CONVERT = "IMAGE_CONVERT", "Convert Image"
     IMAGE_RESIZE = "IMAGE_RESIZE", "Resize Image"
     IMAGE_COMPRESS = "IMAGE_COMPRESS", "Compress Image"
     IMAGE_ROTATE_FLIP = "IMAGE_ROTATE_FLIP", "Rotate or Flip Image"
+    IMAGE_CROP = "IMAGE_CROP", "Crop Image"
+    IMAGE_CONVERT_TO_JPG = "IMAGE_CONVERT_TO_JPG", "Convert To JPG"
+    IMAGE_CONVERT_FROM_JPG = "IMAGE_CONVERT_FROM_JPG", "Convert From JPG"
+    IMAGE_ROTATE_BATCH = "IMAGE_ROTATE_BATCH", "Rotate Images Batch"
 
 
 class ProcessingJob(models.Model):
@@ -84,7 +96,7 @@ class ProcessingJob(models.Model):
 
     def __str__(self):
         return f"{self.tool} - {self.status}"
-    
+
 
 class ProcessingJobFile(models.Model):
     job = models.ForeignKey(
@@ -103,27 +115,3 @@ class ProcessingJobFile(models.Model):
 
     def __str__(self):
         return f"{self.original_filename} ({self.job_id})"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
