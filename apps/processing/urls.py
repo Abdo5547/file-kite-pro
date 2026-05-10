@@ -10,6 +10,7 @@ from .pdf_security_views import (
     ChangePermissionsPdfView,
     DecryptPdfView,
     EncryptPdfView,
+    FlattenPdfView,
     FindAndRedactPdfView,
     RemoveMetadataPdfView,
     RemoveRestrictionsPdfView,
@@ -48,6 +49,7 @@ urlpatterns = [
     path("pdf/find-and-redact/", FindAndRedactPdfView.as_view(), name="pdf-find-and-redact"),
     path("pdf/remove-metadata/", RemoveMetadataPdfView.as_view(), name="pdf-remove-metadata"),
     path("pdf/change-permissions/", ChangePermissionsPdfView.as_view(), name="pdf-change-permissions"),
+    path("pdf/flatten/", FlattenPdfView.as_view(), name="pdf-flatten"),
     path("jobs/", ProcessingJobListView.as_view(), name="job-list"),
     path("jobs/<uuid:job_id>/", ProcessingJobDetailView.as_view(), name="job-detail"),
     path(
