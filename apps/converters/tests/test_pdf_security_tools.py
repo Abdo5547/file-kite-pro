@@ -7,6 +7,7 @@ from pypdf import PdfReader, PdfWriter
 
 from apps.converters.pdf.decrypt import decrypt_pdf_file
 from apps.converters.pdf.encrypt import encrypt_pdf_file
+from apps.converters.pdf.flatten import flatten_pdf_file
 from apps.converters.pdf.metadata import remove_pdf_metadata
 from apps.converters.pdf.permissions import change_pdf_permissions
 from apps.converters.pdf.redact import find_and_redact_text_in_pdf
@@ -118,6 +119,35 @@ class PdfSecurityToolsTests(unittest.TestCase):
                 self.assertNotIn("secret", text.lower())
             finally:
                 document.close()
+
+    def test_flatten_pdf_removes_annotations(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            source = temp_dir_path / "annotated.pdf"
+            flattened = temp_dir_path / "flattened.pdf"
+
+            document = fitz.open()
+            try:
+                page = document.new_page()
+                page.insert_text((72, 72), "flatten me")
+                page.add_text_annot((100, 100), "note")
+                document.save(str(source))
+            finally:
+                document.close()
+
+            flatten_pdf_file(
+                input_path=str(source),
+                output_path=str(flattened),
+            )
+
+            self.assertTrue(flattened.exists())
+
+            result = fitz.open(str(flattened))
+            try:
+                annotations = list(result[0].annots() or [])
+                self.assertEqual(annotations, [])
+            finally:
+                result.close()
 
 
 def _create_simple_pdf(path: Path, text: str) -> None:
