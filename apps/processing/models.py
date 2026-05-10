@@ -24,6 +24,10 @@ class ProcessingTool(models.TextChoices):
     IMAGE_RESIZE = "IMAGE_RESIZE", "Resize Image"
     IMAGE_COMPRESS = "IMAGE_COMPRESS", "Compress Image"
     IMAGE_ROTATE_FLIP = "IMAGE_ROTATE_FLIP", "Rotate or Flip Image"
+    IMAGE_CROP = "IMAGE_CROP", "Crop Image"
+    IMAGE_CONVERT_TO_JPG = "IMAGE_CONVERT_TO_JPG", "Convert To JPG"
+    IMAGE_CONVERT_FROM_JPG = "IMAGE_CONVERT_FROM_JPG", "Convert From JPG"
+    IMAGE_ROTATE_BATCH = "IMAGE_ROTATE_BATCH", "Rotate Images Batch"
 
 
 class ProcessingJob(models.Model):
@@ -84,7 +88,7 @@ class ProcessingJob(models.Model):
 
     def __str__(self):
         return f"{self.tool} - {self.status}"
-    
+
 
 class ProcessingJobFile(models.Model):
     job = models.ForeignKey(
@@ -103,27 +107,3 @@ class ProcessingJobFile(models.Model):
 
     def __str__(self):
         return f"{self.original_filename} ({self.job_id})"
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
